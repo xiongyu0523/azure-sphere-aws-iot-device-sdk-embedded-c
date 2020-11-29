@@ -1,0 +1,11 @@
+{
+  "SchemaVersion": 1,
+  "Name": "azure-sphere-aws-iot-device-sdk-embedded-c",
+  "ComponentId": "40b62eea-6286-4451-a1e3-fd92326b3725",
+  "EntryPoint": "/bin/app",
+  "CmdArgs": [],
+  "Capabilities": {
+    "AllowedApplicationConnections": []
+  },
+  "ApplicationType": "Default"
+}
