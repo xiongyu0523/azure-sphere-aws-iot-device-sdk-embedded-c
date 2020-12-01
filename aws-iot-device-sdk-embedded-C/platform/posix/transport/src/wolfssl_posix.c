@@ -23,6 +23,7 @@
 /* Standard includes. */
 #include <assert.h>
 #include <string.h>
+#include <stdlib.h>
 
 /* POSIX socket include. */
 #include <unistd.h>
@@ -30,8 +31,7 @@
 /* Transport interface include. */
 #include "transport_interface.h"
 
-#include "openssl_posix.h"
-#include <openssl/err.h>
+#include "wolfssl_posix.h"
 
 /*-----------------------------------------------------------*/
 
@@ -66,16 +66,12 @@
 /**
  * @brief Add X509 certificate to the trusted list of root certificates.
  *
- * OpenSSL does not provide a single function for reading and loading certificates
- * from files into stores, so the file API must be called. Start with the
- * root certificate.
- *
  * @param[out] pSslContext SSL context to which the trusted server root CA is to be added.
  * @param[in] pRootCaPath Filepath string to the trusted server root CA.
  *
  * @return 1 on success; -1, 0 on failure;
  */
-static int32_t setRootCa( const SSL_CTX * pSslContext,
+static int32_t setRootCa( const WOLFSSL_CTX * pSslContext,
                           const char * pRootCaPath );
 
 /**
@@ -86,7 +82,7 @@ static int32_t setRootCa( const SSL_CTX * pSslContext,
  *
  * @return 1 on success; 0 failure;
  */
-static int32_t setClientCertificate( SSL_CTX * pSslContext,
+static int32_t setClientCertificate( WOLFSSL_CTX * pSslContext,
                                      const char * pClientCertPath );
 
 /**
@@ -97,23 +93,23 @@ static int32_t setClientCertificate( SSL_CTX * pSslContext,
  *
  * @return 1 on success; 0 on failure;
  */
-static int32_t setPrivateKey( SSL_CTX * pSslContext,
+static int32_t setPrivateKey( WOLFSSL_CTX * pSslContext,
                               const char * pPrivateKeyPath );
 
 /**
- * @brief Passes TLS credentials to the OpenSSL library.
+ * @brief Passes TLS credentials to the WolfSSL library.
  *
  * Provides the root CA certificate, client certificate, and private key to the
- * OpenSSL library. If the client certificate or private key is not NULL, mutual
+ * WolfSSL library. If the client certificate or private key is not NULL, mutual
  * authentication is used when performing the TLS handshake.
  *
  * @param[out] pSslContext SSL context to which the credentials are to be imported.
- * @param[in] pOpensslCredentials TLS credentials to be imported.
+ * @param[in] pWolfsslCredentials TLS credentials to be imported.
  *
  * @return 1 on success; -1, 0 on failure;
  */
-static int32_t setCredentials( SSL_CTX * pSslContext,
-                               const OpensslCredentials_t * pOpensslCredentials );
+static int32_t setCredentials( WOLFSSL_CTX * pSslContext,
+                               const WolfsslCredentials_t * pWolfsslCredentials );
 
 /**
  * @brief Set optional configurations for the TLS connection.
@@ -121,20 +117,20 @@ static int32_t setCredentials( SSL_CTX * pSslContext,
  * This function is used to set SNI, MFLN, and ALPN protocols.
  *
  * @param[in] pSsl SSL context to which the optional configurations are to be set.
- * @param[in] pOpensslCredentials TLS credentials containing configurations.
+ * @param[in] pWolfsslCredentials TLS credentials containing configurations.
  */
-static void setOptionalConfigurations( SSL * pSsl,
-                                       const OpensslCredentials_t * pOpensslCredentials );
+static void setOptionalConfigurations( WOLFSSL * pSsl,
+                                       const WolfsslCredentials_t * pWolfsslCredentials );
 
 /**
- * @brief Converts the sockets wrapper status to openssl status.
+ * @brief Converts the sockets wrapper status to wolfssl status.
  *
  * @param[in] socketStatus Sockets wrapper status.
  *
- * @return #OPENSSL_SUCCESS, #OPENSSL_INVALID_PARAMETER, #OPENSSL_DNS_FAILURE,
- * and #OPENSSL_CONNECT_FAILURE.
+ * @return #WOLFSSL_SUCCESS, #WOLFSSL_INVALID_PARAMETER, #WOLFSSL_DNS_FAILURE,
+ * and #WOLFSSL_CONNECT_FAILURE.
  */
-static OpensslStatus_t convertToOpensslStatus( SocketStatus_t socketStatus );
+static WolfsslStatus_t convertToWolfsslStatus( SocketStatus_t socketStatus );
 
 /*-----------------------------------------------------------*/
 
@@ -172,26 +168,26 @@ static OpensslStatus_t convertToOpensslStatus( SocketStatus_t socketStatus );
 #endif /* #if ( LIBRARY_LOG_LEVEL == LOG_DEBUG ) */
 /*-----------------------------------------------------------*/
 
-static OpensslStatus_t convertToOpensslStatus( SocketStatus_t socketStatus )
+static WolfsslStatus_t convertToWolfsslStatus( SocketStatus_t socketStatus )
 {
-    OpensslStatus_t opensslStatus = OPENSSL_INVALID_PARAMETER;
+    WolfsslStatus_t wolfsslStatus = WOLFSSL_INVALID_PARAMETER;
 
     switch( socketStatus )
     {
         case SOCKETS_SUCCESS:
-            opensslStatus = OPENSSL_SUCCESS;
+            wolfsslStatus = WOLFSSL_SUCCEED;
             break;
 
         case SOCKETS_INVALID_PARAMETER:
-            opensslStatus = OPENSSL_INVALID_PARAMETER;
+            wolfsslStatus = WOLFSSL_INVALID_PARAMETER;
             break;
 
         case SOCKETS_DNS_FAILURE:
-            opensslStatus = OPENSSL_DNS_FAILURE;
+            wolfsslStatus = WOLFSSL_DNS_FAILURE;
             break;
 
         case SOCKETS_CONNECT_FAILURE:
-            opensslStatus = OPENSSL_CONNECT_FAILURE;
+            wolfsslStatus = WOLFSSL_CONNECT_FAILURE;
             break;
 
         default:
@@ -200,102 +196,48 @@ static OpensslStatus_t convertToOpensslStatus( SocketStatus_t socketStatus )
             break;
     }
 
-    return opensslStatus;
+    return wolfsslStatus;
 }
 /*-----------------------------------------------------------*/
 
-static int32_t setRootCa( const SSL_CTX * pSslContext,
-                          const char * pRootCaPath )
+static int32_t setRootCa( const WOLFSSL_CTX* pSslContext,
+                          const char* pRootCaPath)
 {
-    int32_t sslStatus = 1;
-    FILE * pRootCaFile = NULL;
-    X509 * pRootCa = NULL;
+    int32_t sslStatus;
+    int     ret;
 
-    assert( pSslContext != NULL );
-    assert( pRootCaPath != NULL );
+    assert(pSslContext != NULL);
+    assert(pRootCaPath != NULL);
 
-    #if ( LIBRARY_LOG_LEVEL == LOG_DEBUG )
-        logPath( pRootCaPath, ROOT_CA_LABEL );
-    #endif
+#if ( LIBRARY_LOG_LEVEL == LOG_DEBUG )
+    logPath(pRootCaPath, ROOT_CA_LABEL);
+#endif
 
-    /* MISRA Rule 21.6 flags the following line for using the standard
-     * library input/output function `fopen()`. This rule is suppressed because
-     * openssl function #PEM_read_X509 takes an argument of type `FILE *` for
-     * reading the root ca PEM file and `fopen()` needs to be used to get the
-     * file pointer.  */
-    /* coverity[misra_c_2012_rule_21_6_violation] */
-    pRootCaFile = fopen( pRootCaPath, "r" );
-
-    if( pRootCaFile == NULL )
+    ret = wolfSSL_CTX_load_verify_locations(pSslContext, pRootCaPath, NULL);
+    if( ret != WOLFSSL_SUCCESS ) 
     {
-        LogError( ( "fopen failed to find the root CA certificate file: "
-                    "ROOT_CA_PATH=%s.",
-                    pRootCaPath ) );
-        sslStatus = -1;
+        LogError(("Failed to import root CA"));
+        sslStatus = 0;
+    } 
+    else 
+    {
+        LogDebug(("Successfully imported root CA."));
+        sslStatus = 1;
     }
 
-    if( sslStatus == 1 )
-    {
-        /* Read the root CA into an X509 object. */
-        pRootCa = PEM_read_X509( pRootCaFile, NULL, NULL, NULL );
-
-        if( pRootCa == NULL )
-        {
-            LogError( ( "PEM_read_X509 failed to parse root CA." ) );
-            sslStatus = -1;
-        }
-    }
-
-    if( sslStatus == 1 )
-    {
-        /* Add the certificate to the context. */
-        sslStatus = X509_STORE_add_cert( SSL_CTX_get_cert_store( pSslContext ),
-                                         pRootCa );
-
-        if( sslStatus != 1 )
-        {
-            LogError( ( "X509_STORE_add_cert failed to add root CA to certificate store." ) );
-            sslStatus = -1;
-        }
-    }
-
-    /* Free the X509 object used to set the root CA. */
-    if( pRootCa != NULL )
-    {
-        X509_free( pRootCa );
-    }
-
-    /* Close the file if it was successfully opened. */
-    if( pRootCaFile != NULL )
-    {
-        /* MISRA Rule 21.6 flags the following line for using the standard
-         * library input/output function `fclose()`. This rule is suppressed
-         * because openssl function #PEM_read_X509 takes an argument of type
-         * `FILE *` for reading the root ca PEM file and `fopen()` is used to
-         * get the file pointer. The file opened with `fopen()` needs to be
-         * closed by calling `fclose()`.*/
-        /* coverity[misra_c_2012_rule_21_6_violation] */
-        if( fclose( pRootCaFile ) != 0 )
-        {
-            LogWarn( ( "fclose failed to close file %s",
-                       pRootCaPath ) );
-        }
-    }
-
-    /* Log the success message if we successfully imported the root CA. */
-    if( sslStatus == 1 )
-    {
-        LogDebug( ( "Successfully imported root CA." ) );
-    }
+#if defined ( AzureSpherePlatform )
+    free(pRootCaPath);
+#endif
 
     return sslStatus;
 }
 /*-----------------------------------------------------------*/
 
-static int32_t setClientCertificate( SSL_CTX * pSslContext,
+static int32_t setClientCertificate( WOLFSSL_CTX * pSslContext,
                                      const char * pClientCertPath )
 {
-    int32_t sslStatus = -1;
+    int32_t sslStatus = 0;
+    int     ret = WOLFSSL_FAILURE;
 
     assert( pSslContext != NULL );
     assert( pClientCertPath != NULL );
@@ -305,28 +247,28 @@ static int32_t setClientCertificate( SSL_CTX * pSslContext,
     #endif
 
     /* Import the client certificate. */
-    sslStatus = SSL_CTX_use_certificate_chain_file( pSslContext,
-                                                    pClientCertPath );
-
-    if( sslStatus != 1 )
+    ret = wolfSSL_CTX_use_certificate_chain_file( pSslContext,
+                                                  pClientCertPath );
+    if( ret != WOLFSSL_SUCCESS)
     {
-        LogError( ( "SSL_CTX_use_certificate_chain_file failed to import "
-                    "client certificate at %s.",
-                    pClientCertPath ) );
+        LogError(("Failed to import client certificate."));
+        sslStatus = 0;
     }
     else
     {
-        LogDebug( ( "Successfully imported client certificate." ) );
+        LogDebug(("Successfully imported client certificate."));
+        sslStatus = 1;
     }
 
     return sslStatus;
 }
 /*-----------------------------------------------------------*/
 
-static int32_t setPrivateKey( SSL_CTX * pSslContext,
+static int32_t setPrivateKey( WOLFSSL_CTX * pSslContext,
                               const char * pPrivateKeyPath )
 {
-    int32_t sslStatus = -1;
+    int32_t sslStatus = 0;
+    int     ret = WOLFSSL_FAILURE;
 
     assert( pSslContext != NULL );
     assert( pPrivateKeyPath != NULL );
@@ -336,161 +278,151 @@ static int32_t setPrivateKey( SSL_CTX * pSslContext,
     #endif
 
     /* Import the client certificate private key. */
-    sslStatus = SSL_CTX_use_PrivateKey_file( pSslContext,
-                                             pPrivateKeyPath,
-                                             SSL_FILETYPE_PEM );
+    ret = wolfSSL_CTX_use_PrivateKey_file( pSslContext,
+                                           pPrivateKeyPath,
+                                           WOLFSSL_FILETYPE_PEM);
 
-    if( sslStatus != 1 )
+    if (ret != WOLFSSL_SUCCESS)
     {
-        LogError( ( "SSL_CTX_use_PrivateKey_file failed to import client "
-                    "certificate private key at %s.",
-                    pPrivateKeyPath ) );
+        LogError( ( "Failed to import client certificate private key." ) );
+        sslStatus = 0;
     }
     else
     {
         LogDebug( ( "Successfully imported client certificate private key." ) );
+        sslStatus = 1;
     }
+
+#if defined ( AzureSpherePlatform )
+    free(pPrivateKeyPath);
+#endif
 
     return sslStatus;
 }
 /*-----------------------------------------------------------*/
 
-static int32_t setCredentials( SSL_CTX * pSslContext,
-                               const OpensslCredentials_t * pOpensslCredentials )
+static int32_t setCredentials( WOLFSSL_CTX * pSslContext,
+                               const WolfsslCredentials_t * pWolfsslCredentials )
 {
     int32_t sslStatus = 0;
 
     assert( pSslContext != NULL );
-    assert( pOpensslCredentials != NULL );
+    assert( pWolfsslCredentials != NULL );
 
-    if( pOpensslCredentials->pRootCaPath != NULL )
+    if( pWolfsslCredentials->pRootCaPath != NULL )
     {
         sslStatus = setRootCa( pSslContext,
-                               pOpensslCredentials->pRootCaPath );
+                               pWolfsslCredentials->pRootCaPath );
     }
 
     if( ( sslStatus == 1 ) &&
-        ( pOpensslCredentials->pClientCertPath != NULL ) )
+        ( pWolfsslCredentials->pClientCertPath != NULL ) )
     {
         sslStatus = setClientCertificate( pSslContext,
-                                          pOpensslCredentials->pClientCertPath );
+                                          pWolfsslCredentials->pClientCertPath );
     }
 
     if( ( sslStatus == 1 ) &&
-        ( pOpensslCredentials->pPrivateKeyPath != NULL ) )
+        ( pWolfsslCredentials->pPrivateKeyPath != NULL ) )
     {
         sslStatus = setPrivateKey( pSslContext,
-                                   pOpensslCredentials->pPrivateKeyPath );
+                                   pWolfsslCredentials->pPrivateKeyPath );
     }
 
     return sslStatus;
 }
 /*-----------------------------------------------------------*/
 
-static void setOptionalConfigurations( SSL * pSsl,
-                                       const OpensslCredentials_t * pOpensslCredentials )
+static void setOptionalConfigurations( WOLFSSL * pSsl,
+                                       const WolfsslCredentials_t * pWolfsslCredentials)
 {
     int32_t sslStatus = -1;
     int16_t readBufferLength = 0;
+    int     ret = WOLFSSL_FAILURE;
 
     assert( pSsl != NULL );
-    assert( pOpensslCredentials != NULL );
+    assert( pWolfsslCredentials != NULL );
 
     /* Set TLS ALPN if requested. */
-    if( ( pOpensslCredentials->pAlpnProtos != NULL ) &&
-        ( pOpensslCredentials->alpnProtosLen > 0U ) )
+    if( ( pWolfsslCredentials->pAlpnProtos != NULL ) &&
+        ( pWolfsslCredentials->alpnProtosLen > 0U ) )
     {
         LogDebug( ( "Setting ALPN protos." ) );
-        sslStatus = SSL_set_alpn_protos( pSsl,
-                                         ( const uint8_t * ) pOpensslCredentials->pAlpnProtos,
-                                         ( uint32_t ) pOpensslCredentials->alpnProtosLen );
+        ret = wolfSSL_UseALPN( pSsl,
+                             ( char * ) pWolfsslCredentials->pAlpnProtos,
+                             ( unsigned int ) pWolfsslCredentials->alpnProtosLen,
+                               WOLFSSL_ALPN_FAILED_ON_MISMATCH );
 
-        if( sslStatus != 0 )
+        if( ret != WOLFSSL_SUCCESS )
         {
-            LogError( ( "SSL_set_alpn_protos failed to set ALPN protos. %s",
-                        pOpensslCredentials->pAlpnProtos ) );
+            LogError( ( "Failed to set ALPN protos. %s",
+                        pWolfsslCredentials->pAlpnProtos ) );
         }
     }
 
     /* Set TLS MFLN if requested. */
-    if( pOpensslCredentials->maxFragmentLength > 0U )
+    if( pWolfsslCredentials->maxFragmentLength > 0U )
     {
-        LogDebug( ( "Setting max send fragment length %u.",
-                    pOpensslCredentials->maxFragmentLength ) );
+#if !defined( AzureSpherePlatform )
+        /* wolfSSL on Azure Sphere platform does not include wolfSSL_UseMaxFragment due to ABI consideration */
+       
+        LogDebug(("Setting max fragment length."));
 
         /* Set the maximum send fragment length. */
 
-        /* MISRA Directive 4.6 flags the following line for using basic
-         * numerical type long. This directive is suppressed because openssl
-         * function #SSL_set_max_send_fragment expects a length argument
-         * type of long. */
-        /* coverity[misra_c_2012_directive_4_6_violation] */
-        sslStatus = ( int32_t ) SSL_set_max_send_fragment( pSsl,
-                                                           ( long ) pOpensslCredentials->maxFragmentLength );
+        ret = (int32_t)wolfSSL_UseMaxFragment(pSsl,
+            (byte)pWolfsslCredentials->maxFragmentLength);
 
-        if( sslStatus != 1 )
+        if (ret != WOLFSSL_SUCCESS)
         {
-            LogError( ( "Failed to set max send fragment length %u.",
-                        pOpensslCredentials->maxFragmentLength ) );
+            LogError(("Failed to set max send fragment length %u.",
+                pWolfsslCredentials->maxFragmentLength));
         }
-        else
-        {
-            readBufferLength = ( int16_t ) pOpensslCredentials->maxFragmentLength +
-                               SSL3_RT_MAX_ENCRYPTED_OVERHEAD;
-
-            /* Change the size of the read buffer to match the
-             * maximum fragment length + some extra bytes for overhead. */
-            SSL_set_default_read_buffer_len( pSsl,
-                                             ( size_t ) readBufferLength );
-        }
+#endif
     }
 
     /* Enable SNI if requested. */
-    if( pOpensslCredentials->sniHostName != NULL )
+    if( pWolfsslCredentials->sniHostName != NULL )
     {
-        LogDebug( ( "Setting server name %s for SNI.",
-                    pOpensslCredentials->sniHostName ) );
+        LogDebug( ( "Setting server name for SNI." ) );
 
-        /* MISRA Rule 11.8 flags the following line for removing the const
-         * qualifier from the pointed to type. This rule is suppressed because
-         * openssl implementation of #SSL_set_tlsext_host_name internally casts
-         * the pointer to a string literal to a `void *` pointer. */
-        /* coverity[misra_c_2012_rule_11_8_violation] */
-        sslStatus = ( int32_t ) SSL_set_tlsext_host_name( pSsl,
-                                                          pOpensslCredentials->sniHostName );
+        ret = wolfSSL_UseSNI( pSsl,
+                              WOLFSSL_SNI_HOST_NAME,
+                              pWolfsslCredentials->sniHostName,
+                              strlen( pWolfsslCredentials->sniHostName ) );
 
-        if( sslStatus != 1 )
+        if( sslStatus != WOLFSSL_SUCCESS )
         {
             LogError( ( "Failed to set server name %s for SNI.",
-                        pOpensslCredentials->sniHostName ) );
+                        pWolfsslCredentials->sniHostName ) );
         }
     }
 }
 /*-----------------------------------------------------------*/
 
-OpensslStatus_t Openssl_Connect( NetworkContext_t * pNetworkContext,
+WolfsslStatus_t Wolfssl_Connect( NetworkContext_t * pNetworkContext,
                                  const ServerInfo_t * pServerInfo,
-                                 const OpensslCredentials_t * pOpensslCredentials,
+                                 const WolfsslCredentials_t * pWolfsslCredentials,
                                  uint32_t sendTimeoutMs,
                                  uint32_t recvTimeoutMs )
 {
     SocketStatus_t socketStatus = SOCKETS_SUCCESS;
-    OpensslStatus_t returnStatus = OPENSSL_SUCCESS;
+    WolfsslStatus_t returnStatus = WOLFSSL_SUCCEED;
     int32_t sslStatus = 0;
     uint8_t sslObjectCreated = 0;
-    SSL_CTX * pSslContext = NULL;
-    int32_t verifyPeerCertStatus = X509_V_OK;
+    WOLFSSL_CTX *pSslContext = NULL;
+    int ret = WOLFSSL_FAILURE;
 
     /* Validate parameters. */
     if( pNetworkContext == NULL )
     {
         LogError( ( "Parameter check failed: pNetworkContext is NULL." ) );
-        returnStatus = OPENSSL_INVALID_PARAMETER;
+        returnStatus = WOLFSSL_INVALID_PARAMETER;
     }
-    else if( pOpensslCredentials == NULL )
+    else if( pWolfsslCredentials == NULL )
     {
-        LogError( ( "Parameter check failed: pOpensslCredentials is NULL." ) );
-        returnStatus = OPENSSL_INVALID_PARAMETER;
+        LogError( ( "Parameter check failed: pWolfsslCredentials is NULL." ) );
+        returnStatus = WOLFSSL_INVALID_PARAMETER;
     }
     else
     {
@@ -498,60 +430,54 @@ OpensslStatus_t Openssl_Connect( NetworkContext_t * pNetworkContext,
     }
 
     /* Establish the TCP connection. */
-    if( returnStatus == OPENSSL_SUCCESS )
+    if( returnStatus == WOLFSSL_SUCCEED)
     {
         socketStatus = Sockets_Connect( &pNetworkContext->socketDescriptor,
                                         pServerInfo,
                                         sendTimeoutMs,
                                         recvTimeoutMs );
 
-        /* Convert socket wrapper status to openssl status. */
-        returnStatus = convertToOpensslStatus( socketStatus );
+        /* Convert socket wrapper status to wolfssl status. */
+        returnStatus = convertToWolfsslStatus( socketStatus );
     }
 
     /* Create SSL context. */
-    if( returnStatus == OPENSSL_SUCCESS )
+    if( returnStatus == WOLFSSL_SUCCEED )
     {
-        pSslContext = SSL_CTX_new( TLS_client_method() );
+        pSslContext = wolfSSL_CTX_new(wolfTLSv1_2_client_method() );
 
         if( pSslContext == NULL )
         {
-            LogError( ( "Creation of a new SSL_CTX object failed." ) );
-            returnStatus = OPENSSL_API_ERROR;
+            LogError( ( "Creation of a new WOLFSSL_CTX object failed." ) );
+            returnStatus = WOLFSSL_API_ERROR;
         }
     }
 
     /* Setup credentials. */
-    if( returnStatus == OPENSSL_SUCCESS )
+    if( returnStatus == WOLFSSL_SUCCEED)
     {
-        /* Set auto retry mode for the blocking calls to SSL_read and SSL_write.
-         * The mask returned by SSL_CTX_set_mode does not need to be checked. */
-
-        /* MISRA Directive 4.6 flags the following line for using basic
-        * numerical type long. This directive is suppressed because openssl
-        * function #SSL_CTX_set_mode takes an argument of type long. */
-        /* coverity[misra_c_2012_directive_4_6_violation] */
-        ( void ) SSL_CTX_set_mode( pSslContext, ( long ) SSL_MODE_AUTO_RETRY );
+        /* wolfSSL default is to block with blocking io and auto retry. 
+         * No need for SSL_MODE_AUTO_RETRY */
 
         sslStatus = setCredentials( pSslContext,
-                                    pOpensslCredentials );
+                                    pWolfsslCredentials );
 
         if( sslStatus != 1 )
         {
             LogError( ( "Setting up credentials failed." ) );
-            returnStatus = OPENSSL_INVALID_CREDENTIALS;
+            returnStatus = WOLFSSL_INVALID_CREDENTIALS;
         }
     }
 
     /* Create a new SSL session. */
-    if( returnStatus == OPENSSL_SUCCESS )
+    if( returnStatus == WOLFSSL_SUCCEED )
     {
-        pNetworkContext->pSsl = SSL_new( pSslContext );
+        pNetworkContext->pSsl = wolfSSL_new( pSslContext );
 
         if( pNetworkContext->pSsl == NULL )
         {
             LogError( ( "SSL_new failed to create a new SSL context." ) );
-            returnStatus = OPENSSL_API_ERROR;
+            returnStatus = WOLFSSL_API_ERROR;
         }
         else
         {
@@ -560,62 +486,69 @@ OpensslStatus_t Openssl_Connect( NetworkContext_t * pNetworkContext,
     }
 
     /* Setup the socket to use for communication. */
-    if( returnStatus == OPENSSL_SUCCESS )
+    if( returnStatus == WOLFSSL_SUCCEED )
     {
-        /* Enable SSL peer verification. */
-        SSL_set_verify( pNetworkContext->pSsl, SSL_VERIFY_PEER, NULL );
 
-        sslStatus = SSL_set_fd( pNetworkContext->pSsl, pNetworkContext->socketDescriptor );
+#if !defined( AzureSpherePlatform )
+        /* wolfSSL on Azure Sphere platform does not include wolfSSL_CTX_set_verify due to ABI consideration */
 
-        if( sslStatus != 1 )
+        wolfSSL_CTX_set_verify( pNetworkContext->pSsl, WOLFSSL_VERIFY_PEER, NULL );
+#endif
+
+        ret = wolfSSL_set_fd( pNetworkContext->pSsl, pNetworkContext->socketDescriptor );
+
+        if( ret != WOLFSSL_SUCCESS )
         {
-            LogError( ( "SSL_set_fd failed to set the socket fd to SSL context." ) );
-            returnStatus = OPENSSL_API_ERROR;
+            LogError( ( "Failed to set the socket fd to SSL context." ) );
+            returnStatus = WOLFSSL_API_ERROR;
         }
     }
 
     /* Perform the TLS handshake. */
-    if( returnStatus == OPENSSL_SUCCESS )
+    if( returnStatus == WOLFSSL_SUCCEED )
     {
-        setOptionalConfigurations( pNetworkContext->pSsl, pOpensslCredentials );
+        setOptionalConfigurations( pNetworkContext->pSsl, pWolfsslCredentials );
 
-        sslStatus = SSL_connect( pNetworkContext->pSsl );
+        ret = wolfSSL_connect( pNetworkContext->pSsl );
 
-        if( sslStatus != 1 )
+        if( ret != WOLFSSL_SUCCESS )
         {
-            LogError( ( "SSL_connect failed to perform TLS handshake." ) );
-            returnStatus = OPENSSL_HANDSHAKE_FAILED;
+            LogError( ( "Failed to perform TLS handshake." ) );
+            returnStatus = WOLFSSL_HANDSHAKE_FAILED;
         }
     }
 
     /* Verify X509 certificate from peer. */
-    if( returnStatus == OPENSSL_SUCCESS )
+    if( returnStatus == WOLFSSL_SUCCEED )
     {
-        verifyPeerCertStatus = ( int32_t ) SSL_get_verify_result( pNetworkContext->pSsl );
+#if !defined( AzureSpherePlatform )
+        /* wolfSSL on Azure Sphere platform does not include wolfSSL_get_verify_result due to ABI consideration */
+
+        long verifyPeerCertStatus = wolfSSL_get_verify_result( pNetworkContext->pSsl );
 
         if( verifyPeerCertStatus != X509_V_OK )
         {
-            LogError( ( "SSL_get_verify_result failed to verify X509 "
-                        "certificate from peer." ) );
-            returnStatus = OPENSSL_HANDSHAKE_FAILED;
+            LogError( ( "Failed to verify X509 certificate from peer." ) );
+            returnStatus = WOLFSSL_HANDSHAKE_FAILED;
         }
+#endif
     }
 
     /* Free the SSL context. */
     if( pSslContext != NULL )
     {
-        SSL_CTX_free( pSslContext );
+        wolfSSL_CTX_free( pSslContext );
     }
 
     /* Clean up on error. */
-    if( ( returnStatus != OPENSSL_SUCCESS ) && ( sslObjectCreated == 1u ) )
+    if( ( returnStatus != WOLFSSL_SUCCEED ) && ( sslObjectCreated == 1u ) )
     {
-        SSL_free( pNetworkContext->pSsl );
+        wolfSSL_free( pNetworkContext->pSsl );
         pNetworkContext->pSsl = NULL;
     }
 
     /* Log failure or success depending on status. */
-    if( returnStatus != OPENSSL_SUCCESS )
+    if( returnStatus != WOLFSSL_SUCCEED )
     {
         LogError( ( "Failed to establish a TLS connection." ) );
     }
@@ -628,15 +561,15 @@ OpensslStatus_t Openssl_Connect( NetworkContext_t * pNetworkContext,
 }
 /*-----------------------------------------------------------*/
 
-OpensslStatus_t Openssl_Disconnect( const NetworkContext_t * pNetworkContext )
+WolfsslStatus_t Wolfssl_Disconnect( const NetworkContext_t * pNetworkContext )
 {
     SocketStatus_t socketStatus = SOCKETS_INVALID_PARAMETER;
 
     if( pNetworkContext == NULL )
     {
         /* No need to update the status here. The socket status
-         * SOCKETS_INVALID_PARAMETER will be converted to openssl
-         * status OPENSSL_INVALID_PARAMETER before returning from this
+         * SOCKETS_INVALID_PARAMETER will be converted to wolfssl
+         * status WOLFSSL_INVALID_PARAMETER before returning from this
          * function. */
         LogError( ( "Parameter check failed: pNetworkContext is NULL." ) );
     }
@@ -644,33 +577,32 @@ OpensslStatus_t Openssl_Disconnect( const NetworkContext_t * pNetworkContext )
     {
         if( pNetworkContext->pSsl != NULL )
         {
-            /* SSL shutdown should be called twice: once to send "close notify" and
-             * once more to receive the peer's "close notify". */
-            if( SSL_shutdown( pNetworkContext->pSsl ) == 0 )
+            /* WOLFSSL shutdown should be called twice. */
+            if( wolfSSL_shutdown( pNetworkContext->pSsl ) == WOLFSSL_SHUTDOWN_NOT_DONE )
             {
-                ( void ) SSL_shutdown( pNetworkContext->pSsl );
+                ( void ) wolfSSL_shutdown( pNetworkContext->pSsl );
             }
 
-            SSL_free( pNetworkContext->pSsl );
+            wolfSSL_free( pNetworkContext->pSsl );
         }
 
         /* Tear down the socket connection, pNetworkContext != NULL here. */
         socketStatus = Sockets_Disconnect( pNetworkContext->socketDescriptor );
     }
 
-    return convertToOpensslStatus( socketStatus );
+    return convertToWolfsslStatus( socketStatus );
 }
 /*-----------------------------------------------------------*/
 
-/* MISRA Rule 8.13 flags the following line for not using the const qualifier
- * on `pNetworkContext`. Indeed, the object pointed by it is not modified
- * by OpenSSL, but other implementations of `TransportRecv_t` may do so. */
-int32_t Openssl_Recv( NetworkContext_t * pNetworkContext,
+int32_t Wolfssl_Recv( NetworkContext_t * pNetworkContext,
                       void * pBuffer,
                       size_t bytesToRecv )
 {
-    int32_t bytesReceived = 0;
-    int32_t sslError = 0;
+    int bytesReceived = 0;
+    int sslError = 0;
+
+    /* Unused parameter when logs are disabled. */
+    (void)sslError;
 
     if( pNetworkContext == NULL )
     {
@@ -678,25 +610,24 @@ int32_t Openssl_Recv( NetworkContext_t * pNetworkContext,
     }
     else if( pNetworkContext->pSsl != NULL )
     {
-        /* SSL read of data. */
-        bytesReceived = ( int32_t ) SSL_read( pNetworkContext->pSsl,
-                                              pBuffer,
-                                              ( int32_t ) bytesToRecv );
+        /* blocking SSL read of data. */
+        bytesReceived = wolfSSL_read( pNetworkContext->pSsl,
+                                      pBuffer,
+                                      ( int ) bytesToRecv );
 
         /* Handle error return status if transport read did not succeed. */
         if( bytesReceived <= 0 )
         {
-            sslError = SSL_get_error( pNetworkContext->pSsl, bytesReceived );
+            sslError = wolfSSL_get_error( pNetworkContext->pSsl, bytesReceived );
 
-            if( sslError == SSL_ERROR_WANT_READ )
+            if( sslError == WOLFSSL_ERROR_WANT_READ )
             {
                 /* There is no data to receive at this time. */
                 bytesReceived = 0;
             }
             else
             {
-                LogError( ( "Failed to receive data over network: SSL_read failed: "
-                            "ErrorStatus=%s.", ERR_reason_error_string( sslError ) ) );
+                LogError( ( "Failed to receive data over network: error = %d.", sslError ) );
             }
         }
     }
@@ -706,19 +637,16 @@ int32_t Openssl_Recv( NetworkContext_t * pNetworkContext,
                     "SSL object in network context is NULL." ) );
     }
 
-    return bytesReceived;
+    return ( int32_t ) bytesReceived;
 }
 /*-----------------------------------------------------------*/
 
-/* MISRA Rule 8.13 flags the following line for not using the const qualifier
- * on `pNetworkContext`. Indeed, the object pointed by it is not modified
- * by OpenSSL, but other implementations of `TransportSend_t` may do so. */
-int32_t Openssl_Send( NetworkContext_t * pNetworkContext,
+int32_t Wolfssl_Send( NetworkContext_t * pNetworkContext,
                       const void * pBuffer,
                       size_t bytesToSend )
 {
-    int32_t bytesSent = 0;
-    int32_t sslError = 0;
+    int bytesSent = 0;
+    int sslError = 0;
 
     /* Unused parameter when logs are disabled. */
     ( void ) sslError;
@@ -729,17 +657,16 @@ int32_t Openssl_Send( NetworkContext_t * pNetworkContext,
     }
     else if( pNetworkContext->pSsl != NULL )
     {
-        /* SSL write of data. */
-        bytesSent = ( int32_t ) SSL_write( pNetworkContext->pSsl,
-                                           pBuffer,
-                                           ( int32_t ) bytesToSend );
+        /* blocking SSL write of data. */
+        bytesSent = wolfSSL_write( pNetworkContext->pSsl,
+                                   pBuffer,
+                                   ( int ) bytesToSend );
 
         if( bytesSent <= 0 )
         {
-            sslError = SSL_get_error( pNetworkContext->pSsl, bytesSent );
+            sslError = wolfSSL_get_error( pNetworkContext->pSsl, bytesSent );
 
-            LogError( ( "Failed to send data over network: SSL_write of OpenSSL failed: "
-                        "ErrorStatus=%s.", ERR_reason_error_string( sslError ) ) );
+            LogError( ( "Failed to send data over network: error = %d.", sslError ) );
         }
     }
     else

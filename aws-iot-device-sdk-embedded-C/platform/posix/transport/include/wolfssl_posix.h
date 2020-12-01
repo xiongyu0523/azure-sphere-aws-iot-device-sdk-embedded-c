@@ -20,8 +20,8 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef OPENSSL_POSIX_H_
-#define OPENSSL_POSIX_H_
+#ifndef WOLFSSL_POSIX_H_
+#define WOLFSSL_POSIX_H_
 
 /**************************************************/
 /******* DO NOT CHANGE the following order ********/
@@ -37,9 +37,9 @@
 #include "logging_levels.h"
 
 /* Logging configuration for the transport interface implementation which uses
- * OpenSSL and Sockets. */
+ * WolfSSL and Sockets. */
 #ifndef LIBRARY_LOG_NAME
-    #define LIBRARY_LOG_NAME     "Transport_OpenSSL_Sockets"
+    #define LIBRARY_LOG_NAME     "Transport_WolfSSL_Sockets"
 #endif
 #ifndef LIBRARY_LOG_LEVEL
     #define LIBRARY_LOG_LEVEL    LOG_ERROR
@@ -49,8 +49,8 @@
 
 /************ End of logging configuration ****************/
 
-/* OpenSSL include. */
-#include <openssl/ssl.h>
+/* WolfSSL include. */
+#include <wolfssl/ssl.h>
 
 /* Transport includes. */
 #include "transport_interface.h"
@@ -60,7 +60,7 @@
 
 /**
  * @brief Definition of the network context for the transport interface
- * implementation that uses OpenSSL and POSIX sockets.
+ * implementation that uses WolfSSL and POSIX sockets.
  *
  * @note For this transport implementation, the socket descriptor and
  * SSL context is used.
@@ -68,28 +68,28 @@
 struct NetworkContext
 {
     int32_t socketDescriptor;
-    SSL * pSsl;
+    WOLFSSL * pSsl;
 };
 
 /**
- * @brief OpenSSL Connect / Disconnect return status.
+ * @brief WolfSSL Connect / Disconnect return status.
  */
-typedef enum OpensslStatus
+typedef enum WolfsslStatus
 {
-    OPENSSL_SUCCESS = 0,         /**< Function successfully completed. */
-    OPENSSL_INVALID_PARAMETER,   /**< At least one parameter was invalid. */
-    OPENSSL_INSUFFICIENT_MEMORY, /**< Insufficient memory required to establish connection. */
-    OPENSSL_INVALID_CREDENTIALS, /**< Provided credentials were invalid. */
-    OPENSSL_HANDSHAKE_FAILED,    /**< Performing TLS handshake with server failed. */
-    OPENSSL_API_ERROR,           /**< A call to a system API resulted in an internal error. */
-    OPENSSL_DNS_FAILURE,         /**< Resolving hostname of the server failed. */
-    OPENSSL_CONNECT_FAILURE      /**< Initial connection to the server failed. */
-} OpensslStatus_t;
+    WOLFSSL_SUCCEED = 0,         /**< Function successfully completed. */
+    WOLFSSL_INVALID_PARAMETER,   /**< At least one parameter was invalid. */
+    WOLFSSL_INSUFFICIENT_MEMORY, /**< Insufficient memory required to establish connection. */
+    WOLFSSL_INVALID_CREDENTIALS, /**< Provided credentials were invalid. */
+    WOLFSSL_HANDSHAKE_FAILED,    /**< Performing TLS handshake with server failed. */
+    WOLFSSL_API_ERROR,           /**< A call to a system API resulted in an internal error. */
+    WOLFSSL_DNS_FAILURE,         /**< Resolving hostname of the server failed. */
+    WOLFSSL_CONNECT_FAILURE      /**< Initial connection to the server failed. */
+} WolfsslStatus_t;
 
 /**
  * @brief Contains the credentials to establish a TLS connection.
  */
-typedef struct OpensslCredentials
+typedef struct WolfsslCredentials
 {
     /**
      * @brief An array of ALPN protocols. Set to NULL to disable ALPN.
@@ -108,93 +108,99 @@ typedef struct OpensslCredentials
     /**
      * @brief Set a host name to enable SNI. Set to NULL to disable SNI.
      *
-     * @note This string must be NULL-terminated because the OpenSSL API requires it to be.
+     * @note This string must be NULL-terminated.
      */
     const char * sniHostName;
 
     /**
      * @brief Set the value for the TLS max fragment length (TLS MFLN)
      *
-     * OpenSSL allows this value to be in the range of:
-     * [512, 16384 (SSL3_RT_MAX_PLAIN_LENGTH)]
-     *
-     * @note By setting this to 0, OpenSSL uses the default value,
-     * which is 16384 (SSL3_RT_MAX_PLAIN_LENGTH).
+     * WolfSSL allows this value to be in the range of:
+     * 
+     *      WOLFSSL_MFL_2_9  = 1, //  512 bytes
+     *      WOLFSSL_MFL_2_10 = 2, // 1024 bytes
+     *      WOLFSSL_MFL_2_11 = 3, // 2048 bytes
+     *      WOLFSSL_MFL_2_12 = 4, // 4096 bytes
+     *      WOLFSSL_MFL_2_13 = 5, // 8192 bytes wolfSSL ONLY!!!
+     *      WOLFSSL_MFL_2_8 = 6,  //  256 bytes wolfSSL ONLY!!!
+
+     * @note By setting this to other value, WolfSSL uses the default value,
+     * which is 16384.
      */
-    uint16_t maxFragmentLength;
+    uint8_t maxFragmentLength;
 
     /**
      * @brief Filepaths to certificates and private key that are used when
      * performing the TLS handshake.
      *
-     * @note These strings must be NULL-terminated because the OpenSSL API requires them to be.
+     * @note These strings must be NULL-terminated.
      */
     const char * pRootCaPath;     /**< @brief Filepath string to the trusted server root CA. */
     const char * pClientCertPath; /**< @brief Filepath string to the client certificate. */
     const char * pPrivateKeyPath; /**< @brief Filepath string to the client certificate's private key. */
-} OpensslCredentials_t;
+} WolfsslCredentials_t;
 
 /**
- * @brief Sets up a TLS session on top of a TCP connection using the OpenSSL API.
+ * @brief Sets up a TLS session on top of a TCP connection using the WolfSSL API.
  *
  * @param[out] pNetworkContext The output parameter to return the created network context.
  * @param[in] pServerInfo Server connection info.
- * @param[in] pOpensslCredentials Credentials for the TLS connection.
+ * @param[in] pWolfsslCredentials Credentials for the TLS connection.
  * @param[in] sendTimeoutMs Timeout for transport send.
  * @param[in] recvTimeoutMs Timeout for transport recv.
  *
  * @note A timeout of 0 means infinite timeout.
  *
- * @return #OPENSSL_SUCCESS on success;
- * #OPENSSL_INVALID_PARAMETER, #OPENSSL_INVALID_CREDENTIALS,
- * #OPENSSL_INVALID_CREDENTIALS, #OPENSSL_SYSTEM_ERROR on failure.
+ * @return #WOLFSSL_SUCCESS on success;
+ * #WOLFSSL_INVALID_PARAMETER, #WOLFSSL_INVALID_CREDENTIALS,
+ * #WOLFSSL_INVALID_CREDENTIALS, #WOLFSSL_SYSTEM_ERROR on failure.
  */
-OpensslStatus_t Openssl_Connect( NetworkContext_t * pNetworkContext,
+WolfsslStatus_t Wolfssl_Connect( NetworkContext_t * pNetworkContext,
                                  const ServerInfo_t * pServerInfo,
-                                 const OpensslCredentials_t * pOpensslCredentials,
+                                 const WolfsslCredentials_t * pWolfsslCredentials,
                                  uint32_t sendTimeoutMs,
                                  uint32_t recvTimeoutMs );
 
 /**
- * @brief Closes a TLS session on top of a TCP connection using the OpenSSL API.
+ * @brief Closes a TLS session on top of a TCP connection using the WolfSSL API.
  *
  * @param[out] pNetworkContext The output parameter to end the TLS session and
  * clean the created network context.
  *
- * @return #OPENSSL_SUCCESS on success; #OPENSSL_INVALID_PARAMETER on failure.
+ * @return #WOLFSSL_SUCCESS on success; #WOLFSSL_INVALID_PARAMETER on failure.
  */
-OpensslStatus_t Openssl_Disconnect( const NetworkContext_t * pNetworkContext );
+WolfsslStatus_t Wolfssl_Disconnect( const NetworkContext_t * pNetworkContext );
 
 /**
- * @brief Receives data over an established TLS session using the OpenSSL API.
+ * @brief Receives data over an established TLS session using the WolfSSL API.
  *
  * This can be used as #TransportInterface.recv function for receiving data
  * from the network.
  *
- * @param[in] pNetworkContext The network context created using Openssl_Connect API.
+ * @param[in] pNetworkContext The network context created using Wolfssl_Connect API.
  * @param[out] pBuffer Buffer to receive network data into.
  * @param[in] bytesToRecv Number of bytes requested from the network.
  *
  * @return Number of bytes received if successful; negative value on error.
  */
-int32_t Openssl_Recv( NetworkContext_t * pNetworkContext,
+int32_t Wolfssl_Recv( NetworkContext_t * pNetworkContext,
                       void * pBuffer,
                       size_t bytesToRecv );
 
 /**
- * @brief Sends data over an established TLS session using the OpenSSL API.
+ * @brief Sends data over an established TLS session using the WolfSSL API.
  *
  * This can be used as the #TransportInterface.send function to send data
  * over the network.
  *
- * @param[in] pNetworkContext The network context created using Openssl_Connect API.
+ * @param[in] pNetworkContext The network context created using Wolfssl_Connect API.
  * @param[in] pBuffer Buffer containing the bytes to send over the network stack.
  * @param[in] bytesToSend Number of bytes to send over the network.
  *
  * @return Number of bytes sent if successful; negative value on error.
  */
-int32_t Openssl_Send( NetworkContext_t * pNetworkContext,
+int32_t Wolfssl_Send( NetworkContext_t * pNetworkContext,
                       const void * pBuffer,
                       size_t bytesToSend );
 
-#endif /* ifndef OPENSSL_POSIX_H_ */
+#endif /* ifndef WOLFSSL_POSIX_H_ */
