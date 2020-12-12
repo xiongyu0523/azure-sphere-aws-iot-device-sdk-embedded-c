@@ -213,21 +213,17 @@ static int32_t setRootCa( const WOLFSSL_CTX* pSslContext,
     logPath(pRootCaPath, ROOT_CA_LABEL);
 #endif
 
-    ret = wolfSSL_CTX_load_verify_locations(pSslContext, pRootCaPath, NULL);
+    ret = wolfSSL_CTX_load_verify_locations( pSslContext, pRootCaPath, NULL );
     if( ret != WOLFSSL_SUCCESS ) 
     {
-        LogError(("Failed to import root CA"));
+        LogError( ( "Failed to import root CA" ) );
         sslStatus = 0;
     } 
     else 
     {
-        LogDebug(("Successfully imported root CA."));
+        LogDebug( ( "Successfully imported root CA." ) );
         sslStatus = 1;
     }
-
-#if defined ( AzureSpherePlatform )
-    free(pRootCaPath);
-#endif
 
     return sslStatus;
 }
@@ -292,10 +288,6 @@ static int32_t setPrivateKey( WOLFSSL_CTX * pSslContext,
         LogDebug( ( "Successfully imported client certificate private key." ) );
         sslStatus = 1;
     }
-
-#if defined ( AzureSpherePlatform )
-    free(pPrivateKeyPath);
-#endif
 
     return sslStatus;
 }
@@ -391,7 +383,7 @@ static void setOptionalConfigurations( WOLFSSL * pSsl,
                               pWolfsslCredentials->sniHostName,
                               strlen( pWolfsslCredentials->sniHostName ) );
 
-        if( sslStatus != WOLFSSL_SUCCESS )
+        if( ret != WOLFSSL_SUCCESS )
         {
             LogError( ( "Failed to set server name %s for SNI.",
                         pWolfsslCredentials->sniHostName ) );
@@ -444,7 +436,7 @@ WolfsslStatus_t Wolfssl_Connect( NetworkContext_t * pNetworkContext,
     /* Create SSL context. */
     if( returnStatus == WOLFSSL_SUCCEED )
     {
-        pSslContext = wolfSSL_CTX_new(wolfTLSv1_2_client_method() );
+        pSslContext = wolfSSL_CTX_new( wolfTLSv1_2_client_method() );
 
         if( pSslContext == NULL )
         {
@@ -513,7 +505,8 @@ WolfsslStatus_t Wolfssl_Connect( NetworkContext_t * pNetworkContext,
 
         if( ret != WOLFSSL_SUCCESS )
         {
-            LogError( ( "Failed to perform TLS handshake." ) );
+            LogError( ( "Failed to perform TLS handshake, error = %d.", 
+                        wolfSSL_get_error( pNetworkContext->pSsl, ret ) ) );
             returnStatus = WOLFSSL_HANDSHAKE_FAILED;
         }
     }
@@ -554,7 +547,7 @@ WolfsslStatus_t Wolfssl_Connect( NetworkContext_t * pNetworkContext,
     }
     else
     {
-        LogDebug( ( "Established a TLS connection." ) );
+        LogInfo( ( "Established a TLS connection." ) );
     }
 
     return returnStatus;

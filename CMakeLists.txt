@@ -18,11 +18,16 @@ include_directories(${CMAKE_SOURCE_DIR}
 					${CMAKE_SOURCE_DIR}/aws-iot-device-sdk-embedded-C/libraries/standard/coreMQTT/source/include
 					${CMAKE_SOURCE_DIR}/aws-iot-device-sdk-embedded-C/libraries/standard/coreMQTT/source/interface
 					${CMAKE_SOURCE_DIR}/aws-iot-device-sdk-embedded-C/platform/include
-					${CMAKE_SOURCE_DIR}/aws-iot-device-sdk-embedded-C/platform/posix/transport/include)
+					${CMAKE_SOURCE_DIR}/aws-iot-device-sdk-embedded-C/platform/posix/transport/include
+					${CMAKE_SOURCE_DIR}/aws-iot-device-sdk-embedded-C/demos
+					${CMAKE_SOURCE_DIR}/aws-iot-device-sdk-embedded-C/demos/logging-stack
+					${CMAKE_SOURCE_DIR}/aws-iot-device-sdk-embedded-C/demos/mqtt)
 
 # Create executable
 add_executable (${PROJECT_NAME} 
 				main.c
+				aws-iot-device-sdk-embedded-C/demos/mqtt/mqtt_demo_basic_tls/mqtt_demo_basic_tls.c
+				aws-iot-device-sdk-embedded-C/demos/mqtt/mqtt_demo_mutual_auth/mqtt_demo_mutual_auth.c
 				aws-iot-device-sdk-embedded-C/platform/posix/clock_posix.c
 				aws-iot-device-sdk-embedded-C/platform/posix/retry_utils_posix.c
 				aws-iot-device-sdk-embedded-C/platform/posix/transport/src/sockets_posix.c
@@ -33,4 +38,4 @@ add_executable (${PROJECT_NAME}
 				)
 target_link_libraries (${PROJECT_NAME} applibs pthread gcc_s c tlsutils wolfssl)
 
-azsphere_target_add_image_package(${PROJECT_NAME} RESOURCE_FILES "certs/StarfieldClass2CA.pem")
+azsphere_target_add_image_package(${PROJECT_NAME} RESOURCE_FILES "certs/mosquitto.org.crt" "certs/StarfieldClass2CA.crt")

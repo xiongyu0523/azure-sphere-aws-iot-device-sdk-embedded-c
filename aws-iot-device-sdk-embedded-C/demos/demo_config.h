@@ -48,6 +48,30 @@
 
 /************ End of logging configuration ****************/
 
+/* Azure Sphere Application library includes */
+#include <applibs/storage.h>
+#include <tlsutils/deviceauth.h>
+
+/**
+ * @brief MQTT server host name.
+ *
+ * This demo can be run using the open-source Mosquitto broker tool.
+ * A Mosquitto MQTT broker can be setup locally for running this demo against
+ * it. Please refer to the instructions in https://mosquitto.org/ for running
+ * a Mosquitto broker locally.
+ * Alternatively, instructions to run a Mosquitto broker on a Docker container
+ * can be viewed in the README.md of the root directory.
+ *
+ * #define BROKER_ENDPOINT               "...insert here..."
+ */
+#define BROKER_ENDPOINT                 "test.mosquitto.org"         
+
+/**
+ * @brief MQTT server port number.
+ *
+ * In general, port 8883 is for secured MQTT connections.
+ */
+#define BROKER_PORT                     ( 8883 )
 
 /**
  * @brief Details of the MQTT broker to connect to.
@@ -86,9 +110,8 @@
  * @note This path is relative from the demo binary created. Update
  * ROOT_CA_CERT_PATH to the absolute path if this demo is executed from elsewhere.
  */
-#ifndef ROOT_CA_CERT_PATH
-    #define ROOT_CA_CERT_PATH    "certs/StarfieldClass2CA.pem"
-#endif
+#define ROOT_CA_CERT_PATH(x)       Storage_GetAbsolutePathInImagePackage(x)
+
 
 /**
  * @brief Path of the file containing the client certificate.
@@ -101,6 +124,7 @@
  *
  * #define CLIENT_CERT_PATH    "...insert here..."
  */
+#define CLIENT_CERT_PATH        DeviceAuth_GetCertificatePath()
 
 /**
  * @brief Path of the file containing the client's private key.
@@ -113,7 +137,7 @@
  *
  * #define CLIENT_PRIVATE_KEY_PATH    "...insert here..."
  */
-
+#define CLIENT_PRIVATE_KEY_PATH NULL
 
 /**
  * @brief MQTT client identifier.
