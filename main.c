@@ -16,6 +16,8 @@
 /* Demos */
 extern int mqtt_demo_basic_tls(int argc, char **argv);
 extern int mqtt_demo_mutual_auth(int argc, char **argv);
+extern int http_demo_s3_upload(int argc, char** argv);
+extern int http_demo_s3_download(int argc, char **argv);
 
 static bool isNetworkInterfaceConnectedToInternet(void)
 {
@@ -68,6 +70,8 @@ int main(void)
 
     mqtt_demo_basic_tls(0, NULL);
     mqtt_demo_mutual_auth(0, NULL);
+    http_demo_s3_upload(0, NULL);
+    http_demo_s3_download(0, NULL);
  
     return 0;
 }
