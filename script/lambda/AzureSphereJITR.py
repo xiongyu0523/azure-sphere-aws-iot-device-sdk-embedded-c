@@ -26,7 +26,7 @@ def lambda_handler(event, context):
     thing = response['things']
 
     if not thing:
-        response = iotclient.create_thing(thingName=f'Azure-Sphere-{CNStr[0:5]}', attributePayload={'attributes':{'certCN': CNStr, "certID": certId}})
+        response = iotclient.create_thing(thingName=CNStr, attributePayload={'attributes':{'certCN': CNStr, "certID": certId}})
         thingNameStr = response['thingName']
 
     else:

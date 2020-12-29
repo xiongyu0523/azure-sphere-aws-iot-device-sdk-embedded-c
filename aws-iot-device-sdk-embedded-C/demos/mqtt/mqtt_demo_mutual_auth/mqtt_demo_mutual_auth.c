@@ -517,7 +517,7 @@ static int connectToServerWithBackoffRetries( NetworkContext_t * pNetworkContext
 
     /* Initialize credentials for establishing TLS session. */
     memset( &wolfsslCredentials, 0, sizeof( WolfsslCredentials_t ) );
-    wolfsslCredentials.pRootCaPath = ROOT_CA_CERT_PATH("certs/StarfieldClass2CA.crt");
+    wolfsslCredentials.pRootCaPath = ROOT_CA_CERT_PATH( "certs/StarfieldClass2CA.crt" );
 
     /* If #CLIENT_USERNAME is defined, username/password is used for authenticating
      * the client. */
