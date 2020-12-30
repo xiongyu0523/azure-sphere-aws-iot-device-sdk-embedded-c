@@ -24,18 +24,18 @@ def utility_verison():
     return result.stdout.decode('utf-8')
 
 def utility_download_ca_certificate(file_name):
-    result = run(azsphere_program + 'tenant download-ca-certificate -o ' + file_name, capture_output=True)
+    result = run(azsphere_program + 'ca-certificate download -o ' + file_name, capture_output=True)
     str = result.stdout.decode('utf-8')
-    return True if 'Saved the CA certificate' in str else False    
+    return True if 'Saved the requested CA certificate' in str else False    
 
 def utility_download_validation_certificate(code, file_name):
-    result = run(azsphere_program + 'tenant download-validation-certificate -c ' + code + ' -o ' + file_name, capture_output=True)
+    result = run(azsphere_program + 'ca-certificate download-proof -c ' + code + ' -o ' + file_name, capture_output=True)
     str = result.stdout.decode('utf-8')
-    return True if 'Saved the validation certificate' in str else False    
+    return True if 'Saved the requested proof of possession certificate' in str else False    
 
 def register_ca_certificate():
 
-    if utility_verison() < '19.11':
+    if utility_verison() < '20.10':
         print('ERROR: update Azure Sphere SDK to the latest version')
         return
 
@@ -136,7 +136,7 @@ def create_lambda_rule(fn_name):
             Runtime='python3.7',
             Role=f'arn:aws:iam::{accountId}:role/{role_name}',
             Handler=f"{fn_name}.lambda_handler",
-            Code={'ZipFile': open(f'{fn_name}.zip', 'rb').read()},
+            Code={'ZipFile': open(f'lambda/{fn_name}.zip', 'rb').read()},
         )
 
     except lambdaclient.exceptions.ResourceConflictException:

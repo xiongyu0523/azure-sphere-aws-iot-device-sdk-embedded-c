@@ -83,7 +83,7 @@
  *
  * #define AWS_IOT_ENDPOINT               "...insert here..."
  */
-#define AWS_IOT_ENDPOINT               "azu5ixsllp2fm-ats.iot.ap-northeast-1.amazonaws.com"
+#define AWS_IOT_ENDPOINT               "<iotcore>-ats.iot.<region>.amazonaws.com"
 
 /**
  * @brief AWS IoT MQTT broker port number.
