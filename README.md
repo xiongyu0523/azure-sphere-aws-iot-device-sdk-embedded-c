@@ -129,4 +129,4 @@ Here is a diagram dipict the overall workflow
 
 ## Note
 
-   Device Shadow is not supported since azure sphere app do not know its device ID to construct proper MQTT topic
+   Support for device Shadow is not able to scale since thing name is required to construct the topic. In this reference implementation, thing name is the device ID of Azure Sphere which is not exposed to user application at runtime.
