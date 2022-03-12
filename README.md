@@ -11,7 +11,7 @@ More specifically, AWS IoT Core support device Just-in-time-registeration, aka [
 ### Prerequisite
 
 1. Azure Sphere RDB from SeeedStudio or Azure Sphere EVK from Avnet
-2. Minimum [Azure Sphere SDK](https://aka.ms/AzureSphereSDKDownload) is 20.10.
+2. Minimum [Azure Sphere SDK](https://aka.ms/AzureSphereSDKDownload) is 22.02.
 3. [Visual Studio Code](https://code.visualstudio.com/) or [Visual Studio 2019](https://visualstudio.microsoft.com/) installed on Windows 10 PC.
 4. [Microsoft Account](https://docs.microsoft.com/en-us/azure-sphere/deployment/microsoft-account) to be used with Azure Sphere Developer Utility
 5. [AWS Account](https://aws.amazon.com/) to host your services
@@ -31,11 +31,6 @@ More specifically, AWS IoT Core support device Just-in-time-registeration, aka [
    ```
    azsphere tenant show-selected
    ```
-5. Retrieve your Azure Sphere device ID in lowercase for later use
-   
-   ```
-   powershell -Command ((azsphere device show-attached)[0] -split ': ')[1].ToLower()
-   ```   
 
 ### Setup for AWS environment
 
@@ -95,10 +90,6 @@ More specifically, AWS IoT Core support device Just-in-time-registeration, aka [
     1. define S3 presigned PUT and GET url
     
         ![](images/s3url.png)
-
-    1. replace thing name with your Azure Sphere device ID in lowercase. The thing identity will be created by lambda function for the first time device connect to AWS IoT core.
-   
-        ![](images/thingname.png)
  
 
 6. In Solution Explorer, right-click the CMakeLists.txt file, and select **Generate Cache for azure-sphere-aws-iot-device-sdk-embedded-c**. This step performs the cmake build process to generate the native ninja build files. 
@@ -126,7 +117,3 @@ More specifically, AWS IoT Core support device Just-in-time-registeration, aka [
 Here is a diagram dipict the overall workflow 
 
 ![](images/workflow.png)
-
-## Note
-
-   Support for device Shadow is not able to scale since thing name is required to construct the topic. In this reference implementation, thing name is the device ID of Azure Sphere which is not exposed to user application at runtime.

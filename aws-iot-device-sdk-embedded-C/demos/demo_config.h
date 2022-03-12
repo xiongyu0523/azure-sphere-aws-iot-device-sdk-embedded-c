@@ -231,16 +231,4 @@
  */
 #define MQTT_LIB                  "core-mqtt@1.0.1"
 
- /**
-  * @brief Predefined thing name.
-  *
-  * This is the example predefine thing name and could be compiled in ROM code.
-  */
-#define THING_NAME                "<thing name>"
-
-  /**
-   * @brief The length of #THING_NAME.
-   */
-#define THING_NAME_LENGTH         ( ( uint16_t ) ( sizeof( THING_NAME ) - 1 ) )
-
 #endif /* ifndef DEMO_CONFIG_H_ */

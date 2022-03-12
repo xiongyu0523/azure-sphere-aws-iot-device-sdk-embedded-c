@@ -148,6 +148,11 @@
  */
 #define SHADOW_REPORTED_JSON_LENGTH    ( sizeof( SHADOW_REPORTED_JSON ) - 3 )
 
+/**
+* @brief The maximum size of all shadow topic
+*/
+#define SHADOW_TOPIC_MAX_LENGTH  ( 256U )
+
 /*-----------------------------------------------------------*/
 
 /**
@@ -172,6 +177,15 @@ static uint32_t clientToken = 0U;
  * error occurred during the MQTT event callback, then the demo has failed.
  */
 static bool eventCallbackError = false;
+
+/**
+ * @brief Hold shadow topic string
+ */
+static char ShadowTopicStringDelete[ SHADOW_TOPIC_MAX_LENGTH ];
+static char ShadowTopicStringUpdateDelta[ SHADOW_TOPIC_MAX_LENGTH ];
+static char ShadowTopicStringUpdateAccepted[ SHADOW_TOPIC_MAX_LENGTH ];
+static char ShadowTopicStringUpdateRejected[ SHADOW_TOPIC_MAX_LENGTH ];
+static char ShadowTopicStringUpdate[ SHADOW_TOPIC_MAX_LENGTH ];
 
 /*-----------------------------------------------------------*/
 
@@ -210,6 +224,12 @@ static void updateDeltaHandler( MQTTPublishInfo_t * pPublishInfo );
  * packet.
  */
 static void updateAcceptedHandler( MQTTPublishInfo_t * pPublishInfo );
+
+
+static int loadTopicStrings(void);
+
+/* Import GetDeviceID */
+extern int GetDeviceID(char* deviceId, size_t deviceIdLength);
 
 /*-----------------------------------------------------------*/
 
@@ -496,6 +516,30 @@ static void eventCallback( MQTTContext_t * pMqttContext,
     }
 }
 
+/* 
+ * Load device ID to build topic strings needed in this demo
+ */
+static int loadTopicStrings(void)
+{
+    int ret = -1;
+    uint16_t outLength = 0;
+
+    char device_id[256];
+
+    if (GetDeviceID(device_id, 256) == 0) 
+    {
+        Shadow_GetTopicString(ShadowTopicStringTypeDelete, device_id, strlen(device_id), ShadowTopicStringDelete, SHADOW_TOPIC_MAX_LENGTH, &outLength);
+        Shadow_GetTopicString(ShadowTopicStringTypeUpdateDelta, device_id, strlen(device_id), ShadowTopicStringUpdateDelta, SHADOW_TOPIC_MAX_LENGTH, &outLength);
+        Shadow_GetTopicString(ShadowTopicStringTypeUpdateAccepted, device_id, strlen(device_id), ShadowTopicStringUpdateAccepted, SHADOW_TOPIC_MAX_LENGTH, &outLength);
+        Shadow_GetTopicString(ShadowTopicStringTypeUpdateRejected, device_id, strlen(device_id), ShadowTopicStringUpdateRejected, SHADOW_TOPIC_MAX_LENGTH, &outLength);
+        Shadow_GetTopicString(ShadowTopicStringTypeUpdate, device_id, strlen(device_id), ShadowTopicStringUpdate, SHADOW_TOPIC_MAX_LENGTH, &outLength);
+    
+        ret = 0;
+    }
+
+    return ret;
+}
+
 /*-----------------------------------------------------------*/
 
 /**
@@ -529,6 +573,13 @@ int shadow_demo_main( int argc,
     ( void ) argc;
     ( void ) argv;
 
+    if (loadTopicStrings() < 0) {
+
+        LogError( ( "Failed to load shadow topic strings." ) );
+
+        return EXIT_FAILURE;
+    }
+
     returnStatus = EstablishMqttSession( eventCallback );
 
     if( returnStatus == EXIT_FAILURE )
@@ -539,8 +590,8 @@ int shadow_demo_main( int argc,
     else
     {
         /* First of all, try to delete any Shadow document in the cloud. */
-        returnStatus = PublishToTopic( SHADOW_TOPIC_STRING_DELETE( THING_NAME ),
-                                       SHADOW_TOPIC_LENGTH_DELETE( THING_NAME_LENGTH ),
+        returnStatus = PublishToTopic( ShadowTopicStringDelete,
+                                       strlen( ShadowTopicStringDelete ),
                                        updateDocument,
                                        0U );
 
@@ -548,20 +599,20 @@ int shadow_demo_main( int argc,
          * to subscribe shadow topics. */
         if( returnStatus == EXIT_SUCCESS )
         {
-            returnStatus = SubscribeToTopic( SHADOW_TOPIC_STRING_UPDATE_DELTA( THING_NAME ),
-                                             SHADOW_TOPIC_LENGTH_UPDATE_DELTA( THING_NAME_LENGTH ) );
+            returnStatus = SubscribeToTopic( ShadowTopicStringUpdateDelta,
+                                             strlen( ShadowTopicStringUpdateDelta ) );
         }
 
         if( returnStatus == EXIT_SUCCESS )
         {
-            returnStatus = SubscribeToTopic( SHADOW_TOPIC_STRING_UPDATE_ACCEPTED( THING_NAME ),
-                                             SHADOW_TOPIC_LENGTH_UPDATE_ACCEPTED( THING_NAME_LENGTH ) );
+            returnStatus = SubscribeToTopic( ShadowTopicStringUpdateAccepted,
+                                             strlen( ShadowTopicStringUpdateAccepted ) );
         }
 
         if( returnStatus == EXIT_SUCCESS )
         {
-            returnStatus = SubscribeToTopic( SHADOW_TOPIC_STRING_UPDATE_REJECTED( THING_NAME ),
-                                             SHADOW_TOPIC_LENGTH_UPDATE_REJECTED( THING_NAME_LENGTH ) );
+            returnStatus = SubscribeToTopic( ShadowTopicStringUpdateRejected,
+                                             strlen( ShadowTopicStringUpdateRejected ) );
         }
 
         /* This demo uses a constant #THING_NAME known at compile time therefore we can use macros to
@@ -610,8 +661,8 @@ int shadow_demo_main( int argc,
                       ( int ) 1,
                       ( long unsigned ) ( Clock_GetTimeMs() % 1000000 ) );
 
-            returnStatus = PublishToTopic( SHADOW_TOPIC_STRING_UPDATE( THING_NAME ),
-                                           SHADOW_TOPIC_LENGTH_UPDATE( THING_NAME_LENGTH ),
+            returnStatus = PublishToTopic( ShadowTopicStringUpdate,
+                                           strlen( ShadowTopicStringUpdate ),
                                            updateDocument,
                                            ( SHADOW_DESIRED_JSON_LENGTH + 1 ) );
         }
@@ -642,8 +693,8 @@ int shadow_demo_main( int argc,
                           ( int ) currentPowerOnState,
                           ( long unsigned ) clientToken );
 
-                returnStatus = PublishToTopic( SHADOW_TOPIC_STRING_UPDATE( THING_NAME ),
-                                               SHADOW_TOPIC_LENGTH_UPDATE( THING_NAME_LENGTH ),
+                returnStatus = PublishToTopic( ShadowTopicStringUpdate,
+                                               strlen( ShadowTopicStringUpdate ),
                                                updateDocument,
                                                ( SHADOW_DESIRED_JSON_LENGTH + 1 ) );
             }
@@ -656,20 +707,20 @@ int shadow_demo_main( int argc,
         if( returnStatus == EXIT_SUCCESS )
         {
             LogInfo( ( "Start to unsubscribe shadow topics and disconnect from MQTT. \r\n" ) );
-            returnStatus = UnsubscribeFromTopic( SHADOW_TOPIC_STRING_UPDATE_DELTA( THING_NAME ),
-                                                 SHADOW_TOPIC_LENGTH_UPDATE_DELTA( THING_NAME_LENGTH ) );
+            returnStatus = UnsubscribeFromTopic( ShadowTopicStringUpdateDelta,
+                                                 strlen( ShadowTopicStringUpdateDelta ) );
         }
 
         if( returnStatus == EXIT_SUCCESS )
         {
-            returnStatus = UnsubscribeFromTopic( SHADOW_TOPIC_STRING_UPDATE_ACCEPTED( THING_NAME ),
-                                                 SHADOW_TOPIC_LENGTH_UPDATE_ACCEPTED( THING_NAME_LENGTH ) );
+            returnStatus = UnsubscribeFromTopic( ShadowTopicStringUpdateAccepted,
+                                                 strlen( ShadowTopicStringUpdateAccepted ) );
         }
 
         if( returnStatus == EXIT_SUCCESS )
         {
-            returnStatus = UnsubscribeFromTopic( SHADOW_TOPIC_STRING_UPDATE_REJECTED( THING_NAME ),
-                                                 SHADOW_TOPIC_LENGTH_UPDATE_REJECTED( THING_NAME_LENGTH ) );
+            returnStatus = UnsubscribeFromTopic( ShadowTopicStringUpdateRejected,
+                                                 strlen( ShadowTopicStringUpdateRejected ) );
         }
 
         /* The MQTT session is always disconnected, even there were prior failures. */

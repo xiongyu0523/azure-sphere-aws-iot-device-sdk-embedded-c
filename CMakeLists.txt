@@ -5,8 +5,8 @@ cmake_minimum_required (VERSION 3.10)
 
 project (azure-sphere-aws-iot-device-sdk-embedded-c C)
 
-azsphere_configure_tools(TOOLS_REVISION "20.10")
-azsphere_configure_api(TARGET_API_SET "7")
+azsphere_configure_tools(TOOLS_REVISION "22.02")
+azsphere_configure_api(TARGET_API_SET "12")
 
 add_compile_definitions(AzureSpherePlatform)
 
@@ -34,6 +34,7 @@ include_directories(${CMAKE_SOURCE_DIR}
 # Create executable
 add_executable (${PROJECT_NAME} 
 				main.c
+				get_device_id.c
 				aws-iot-device-sdk-embedded-C/demos/mqtt/mqtt_demo_basic_tls/mqtt_demo_basic_tls.c
 				aws-iot-device-sdk-embedded-C/demos/mqtt/mqtt_demo_mutual_auth/mqtt_demo_mutual_auth.c
 				aws-iot-device-sdk-embedded-C/demos/http/http_demo_s3_download/http_demo_s3_download.c
